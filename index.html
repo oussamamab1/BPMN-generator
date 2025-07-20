@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BPMN Diagramm Generator</title>
+    <script src="https://cdn.jsdelivr.net/npm/bpmn-js@17/dist/bpmn-viewer.production.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 0;
+            height: 80vh;
+        }
+
+        .input-panel {
+            background: #f8fafc;
+            padding: 30px;
+            border-right: 1px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .api-selector {
+            margin-bottom: 20px;
+        }
+
+        .api-selector label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .api-selector select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 16px;
+            background: white;
+            transition: border-color 0.3s ease;
+        }
+
+        .api-selector select:focus {
+            outline: none;
+            border-color: #4facfe;
+        }
+
+        .api-key-input {
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .api-key-input label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .api-key-input input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 16px;
+            background: white;
+            transition: border-color 0.3s ease;
+        }
+
+        .api-key-input input:focus {
+            outline: none;
+            border-color: #4facfe;
+        }
+
+        .api-key-input small {
+            color: #64748b;
+            font-size: 12px;
+            margin-top: 5px;
+            display: block;
+        }
+
+        .input-group {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .input-group label {
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .process-input {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 16px;
+            resize: none;
+            font-family: inherit;
+            transition: border-color 0.3s ease;
+        }
+
+        .process-input:focus {
+            outline: none;
+            border-color: #4facfe;
+        }
+
+        .generate-btn {
+            margin-top: 20px;
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .generate-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+
+        .generate-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .viewer-panel {
+            background: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #64748b;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #e2e8f0;
+            border-top: 4px solid #4facfe;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 1000;
+        }
+
+        .control-btn {
+            padding: 10px 15px;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .control-btn:hover {
+            background: #f8fafc;
+        }
+
+        .error {
+            background: #fee2e2;
+            color: #dc2626;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            border-left: 4px solid #dc2626;
+        }
+
+        .success {
+            background: #dcfce7;
+            color: #16a34a;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            border-left: 4px solid #16a34a;
+        }
+
+        .welcome-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #64748b;
+            font-size: 18px;
+        }
+
+        @media (max-width: 1024px) {
+            .content {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto 1fr;
+                height: auto;
+                min-height: 80vh;
+            }
+            
+            .viewer-panel {
+                min-height: 60vh;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔄 BPMN Diagramm Generator</h1>
+            <p>Beschreibe deinen Geschäftsprozess und erhalte automatisch ein BPMN-Diagramm</p>
+        </div>
+        
+        <div class="content">
+            <div class="input-panel">
+                <div class="api-selector">
+                    <label for="aiProvider">KI-Provider wählen:</label>
+                    <select id="aiProvider" onchange="toggleApiKeyInput()">
+                        <option value="demo">Demo </option>
+                        <option value="chatgpt">ChatGPT (OpenAI)</option>
+                        <option value="claude">Claude (Anthropic)</option>
+                    </select>
+                </div>
+
+                <div id="apiKeySection" class="api-key-input">
+                    <label for="apiKey">API Key:</label>
+                    <input type="password" id="apiKey" placeholder="Gib deinen API-Key hier ein...">
+                    <small>Dein API-Key wird nur für diese Session gespeichert und nicht übertragen.</small>
+                </div>
+
+                <div class="input-group">
+                    <label for="processDescription">Beschreibe deinen Geschäftsprozess:</label>
+                    <textarea 
+                        id="processDescription" 
+                        class="process-input" 
+                        placeholder="🚀 Beschreibe deinen Prozess Schritt für Schritt...
+
+💡 TIPPS FÜR BESSERE ERGEBNISSE:
+• Nutze klare Verben (prüfen, senden, genehmigen, erstellen...)
+• Erwähne Entscheidungspunkte (wenn/falls, ja/nein, erfolgreich/fehlgeschlagen)
+• Benenne Beteiligte (Kunde, Manager, System, Abteilung...)
+• Beschreibe Start- und Endpunkte deutlich
+
+📋 BEISPIEL-PROZESSE:
+
+🛒 E-Commerce Bestellung:
+'Kunde legt Artikel in Warenkorb → Zur Kasse gehen → Zahlungsdaten eingeben → Zahlung prüfen → Bei Erfolg: Bestellung bestätigen und Versand starten → Bei Fehler: Fehlermeldung anzeigen'
+
+📄 Urlaubsantrag:
+'Mitarbeiter stellt Urlaubsantrag → Manager prüft Verfügbarkeit → Falls verfügbar: Antrag genehmigen → Falls nicht: Antrag ablehnen → HR-System aktualisieren → Mitarbeiter benachrichtigen'
+
+🔧 Kundensupport:
+'Kunde meldet Problem → Ticket erstellen → Schweregrad bewerten → Bei kritisch: Sofort bearbeiten → Bei normal: In Warteschlange einreihen → Problem lösen → Lösung testen → Ticket schließen → Kunde informieren'
+
+💼 Rechnungsfreigabe:
+'Rechnung eingeht → Automatische Prüfung → Falls unter 1000€: Automatisch freigeben → Falls über 1000€: Manager-Freigabe erforderlich → Nach Freigabe: Zahlung veranlassen → Buchhaltung informieren'
+
+✨ Dein Prozess hier..."
+                    ></textarea>
+                </div>
+
+                <button id="generateBtn" class="generate-btn">
+                    📊 BPMN Diagramm generieren
+                </button>
+
+                <div id="messageContainer"></div>
+            </div>
+
+            <div class="viewer-panel">
+                <div class="controls">
+                    <button class="control-btn" onclick="zoomIn()">🔍 Zoom +</button>
+                    <button class="control-btn" onclick="zoomOut()">🔍 Zoom -</button>
+                    <button class="control-btn" onclick="resetZoom()">🎯 Reset</button>
+                    <button class="control-btn" onclick="downloadXML()">💾 XML</button>
+                    <button class="control-btn" onclick="downloadSVG()">🖼️ SVG</button>
+                </div>
+                
+                <div id="loading" class="loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Generiere BPMN-Diagramm...</p>
+                </div>
+                
+                <div id="welcomeMessage" class="welcome-message">
+                    <p>👋 Willkommen! Beschreibe deinen Prozess links und klicke auf "Generieren"</p>
+                </div>
+                
+                <div id="canvas"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let viewer;
+        let currentXML = '';
+
+        // BPMN Viewer initialisieren
+        function initializeBPMNViewer() {
+            try {
+                if (typeof BpmnJS === 'undefined') {
+                    console.error('BpmnJS ist nicht verfügbar');
+                    return;
+                }
+                
+                viewer = new BpmnJS({
+                    container: '#canvas',
+                    width: '100%',
+                    height: '100%'
+                });
+                
+                console.log('BPMN Viewer erfolgreich initialisiert');
+            } catch (error) {
+                console.error('Fehler beim Initialisieren des BPMN Viewers:', error);
+                showMessage('BPMN Viewer konnte nicht geladen werden. Bitte Seite neu laden.', 'error');
+            }
+        }
+
+        // Demo BPMN XML direkt eingebettet (kann auch aus externer Datei kommen)
+        function getDemoBPMN() {
+            // Hier kannst du den Inhalt deiner demo.bpmn Datei einfügen
+            return `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_1" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1" name="Bestellung eingegangen">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:task id="Task_1" name="Verfügbarkeit prüfen">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="Gateway_1" name="Verfügbar?">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="Task_2" name="Bestellung bestätigen">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_5</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="Task_3" name="Zahlung verarbeiten">
+      <bpmn:incoming>Flow_5</bpmn:incoming>
+      <bpmn:outgoing>Flow_6</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="Task_4" name="Produkt versenden">
+      <bpmn:incoming>Flow_6</bpmn:incoming>
+      <bpmn:outgoing>Flow_7</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="Task_5" name="Kunde benachrichtigen">
+      <bpmn:incoming>Flow_4</bpmn:incoming>
+      <bpmn:outgoing>Flow_8</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:endEvent id="EndEvent_1" name="Bestellung abgeschlossen">
+      <bpmn:incoming>Flow_7</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="EndEvent_2" name="Bestellung abgelehnt">
+      <bpmn:incoming>Flow_8</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Task_1" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_1" targetRef="Gateway_1" />
+    <bpmn:sequenceFlow id="Flow_3" name="Ja" sourceRef="Gateway_1" targetRef="Task_2" />
+    <bpmn:sequenceFlow id="Flow_4" name="Nein" sourceRef="Gateway_1" targetRef="Task_5" />
+    <bpmn:sequenceFlow id="Flow_5" sourceRef="Task_2" targetRef="Task_3" />
+    <bpmn:sequenceFlow id="Flow_6" sourceRef="Task_3" targetRef="Task_4" />
+    <bpmn:sequenceFlow id="Flow_7" sourceRef="Task_4" targetRef="EndEvent_1" />
+    <bpmn:sequenceFlow id="Flow_8" sourceRef="Task_5" targetRef="EndEvent_2" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_1">
+      <bpmndi:BPMNShape id="_BPMNShape_StartEvent_2" bpmnElement="StartEvent_1">
+        <dc:Bounds x="100" y="100" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="80" y="143" width="76" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_1_di" bpmnElement="Task_1">
+        <dc:Bounds x="200" y="78" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_1_di" bpmnElement="Gateway_1" isMarkerVisible="true">
+        <dc:Bounds x="375" y="93" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="374" y="69" width="52" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_2_di" bpmnElement="Task_2">
+        <dc:Bounds x="500" y="78" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_3_di" bpmnElement="Task_3">
+        <dc:Bounds x="650" y="78" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_4_di" bpmnElement="Task_4">
+        <dc:Bounds x="800" y="78" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_5_di" bpmnElement="Task_5">
+        <dc:Bounds x="500" y="200" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1">
+        <dc:Bounds x="950" y="100" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="930" y="143" width="76" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_2_di" bpmnElement="EndEvent_2">
+        <dc:Bounds x="650" y="222" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="630" y="265" width="76" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1">
+        <di:waypoint x="136" y="118" />
+        <di:waypoint x="200" y="118" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2">
+        <di:waypoint x="300" y="118" />
+        <di:waypoint x="375" y="118" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_3_di" bpmnElement="Flow_3">
+        <di:waypoint x="425" y="118" />
+        <di:waypoint x="500" y="118" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="456" y="100" width="13" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_4_di" bpmnElement="Flow_4">
+        <di:waypoint x="400" y="143" />
+        <di:waypoint x="400" y="240" />
+        <di:waypoint x="500" y="240" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="405" y="189" width="23" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_5_di" bpmnElement="Flow_5">
+        <di:waypoint x="600" y="118" />
+        <di:waypoint x="650" y="118" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_6_di" bpmnElement="Flow_6">
+        <di:waypoint x="750" y="118" />
+        <di:waypoint x="800" y="118" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_7_di" bpmnElement="Flow_7">
+        <di:waypoint x="900" y="118" />
+        <di:waypoint x="950" y="118" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_8_di" bpmnElement="Flow_8">
+        <di:waypoint x="600" y="240" />
+        <di:waypoint x="650" y="240" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>`;
+        }
+
+        // BPMN XML laden und anzeigen
+        async function loadBPMN(xml) {
+            if (!viewer) return;
+            
+            try {
+                await viewer.importXML(xml);
+                currentXML = xml;
+                
+                // Auto-fit
+                const canvas = viewer.get('canvas');
+                canvas.zoom('fit-viewport');
+                
+                // Welcome Message verstecken
+                document.getElementById('welcomeMessage').style.display = 'none';
+            } catch (error) {
+                console.error('Fehler beim Laden des BPMN:', error);
+                showMessage('Fehler beim Anzeigen des BPMN-Diagramms: ' + error.message, 'error');
+            }
+        }
+
+        // API Key Input ein-/ausblenden
+        function toggleApiKeyInput() {
+            const provider = document.getElementById('aiProvider').value;
+            const apiKeySection = document.getElementById('apiKeySection');
+            const processDescription = document.getElementById('processDescription');
+            
+            if (provider === 'demo') {
+                apiKeySection.style.display = 'none';
+                // Demo-Text setzen
+                processDescription.value = "Ein Kunde möchte eine Bestellung aufgeben. Zuerst wird die Verfügbarkeit geprüft. Wenn verfügbar, wird die Bestellung bestätigt und zur Zahlung weitergeleitet. Nach erfolgreicher Zahlung wird das Produkt versendet. Falls nicht verfügbar, wird der Kunde benachrichtigt.";
+            } else {
+                apiKeySection.style.display = 'block';
+                if (!processDescription.value || processDescription.value.includes("Ein Kunde möchte eine Bestellung")) {
+                    processDescription.value = "";
+                }
+            }
+        }
+
+        // Nachrichten anzeigen
+        function showMessage(message, type = 'error') {
+            const messageContainer = document.getElementById('messageContainer');
+            const className = type === 'error' ? 'error' : 'success';
+            messageContainer.innerHTML = `<div class="${className}">${message}</div>`;
+        }
+
+        // Nachrichten löschen
+        function clearMessages() {
+            document.getElementById('messageContainer').innerHTML = '';
+        }
+
+        // Loading anzeigen/verstecken
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+        }
+
+        // KI API aufrufen
+        async function callAI(provider, description, apiKey) {
+            if (provider === 'demo') {
+                // Simuliere kurze Ladezeit für Demo
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                return getDemoBPMN();
+            }
+            
+            if (provider === 'chatgpt') {
+                return await callOpenAI(description, apiKey);
+            }
+            
+            if (provider === 'claude') {
+                return await callClaude(description, apiKey);
+            }
+            
+            throw new Error('Unbekannter Provider');
+        }
+
+        // OpenAI API aufrufen
+        async function callOpenAI(description, apiKey) {
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                    model: 'gpt-4',
+                    messages: [{
+                        role: 'user',
+                        content: `Generiere ein vollständiges BPMN 2.0 XML-Diagramm für folgenden Geschäftsprozess. Das XML muss gültiges BPMN 2.0 Format haben mit allen notwendigen Namespaces und BPMNDiagram-Elementen für die Visualisierung:
+
+${description}
+
+Antworte nur mit dem XML-Code, ohne weitere Erklärungen.`
+                    }],
+                    max_tokens: 4000
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(`OpenAI API Fehler: ${error.error?.message || response.statusText}`);
+            }
+
+            const data = await response.json();
+            return data.choices[0].message.content.trim();
+        }
+
+        // Claude API aufrufen
+        async function callClaude(description, apiKey) {
+            const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': apiKey,
+                    'anthropic-version': '2023-06-01'
+                },
+                body: JSON.stringify({
+                    model: 'claude-3-sonnet-20240229',
+                    max_tokens: 4000,
+                    messages: [{
+                        role: 'user',
+                        content: `Generiere ein vollständiges BPMN 2.0 XML-Diagramm für folgenden Geschäftsprozess. Das XML muss gültiges BPMN 2.0 Format haben mit allen notwendigen Namespaces und BPMNDiagram-Elementen für die Visualisierung:
+
+${description}
+
+Antworte nur mit dem XML-Code, ohne weitere Erklärungen.`
+                    }]
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(`Claude API Fehler: ${error.error?.message || response.statusText}`);
+            }
+
+            const data = await response.json();
+            return data.content[0].text.trim();
+        }
+
+        // Hauptfunktion zum Generieren
+        async function generateBPMN() {
+            const description = document.getElementById('processDescription').value;
+            const provider = document.getElementById('aiProvider').value;
+            const apiKey = document.getElementById('apiKey').value;
+            
+            // Validierung
+            if (provider !== 'demo' && !description.trim()) {
+                showMessage('Bitte gib eine Prozessbeschreibung ein.', 'error');
+                return;
+            }
+            
+            if (provider !== 'demo' && !apiKey.trim()) {
+                showMessage('Bitte gib deinen API-Key ein.', 'error');
+                return;
+            }
+            
+            clearMessages();
+            showLoading(true);
+            
+            try {
+                let xml = await callAI(provider, description, apiKey);
+                
+                // XML bereinigen (falls Code-Blöcke enthalten sind)
+                xml = xml.replace(/```xml\n?/g, '').replace(/```\n?/g, '').trim();
+                
+                await loadBPMN(xml);
+                showMessage('BPMN-Diagramm erfolgreich generiert!', 'success');
+            } catch (error) {
+                console.error('Fehler:', error);
+                showMessage('Fehler beim Generieren des BPMN-Diagramms: ' + error.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Zoom-Funktionen
+        function zoomIn() {
+            if (viewer) {
+                const canvas = viewer.get('canvas');
+                canvas.zoom(canvas.zoom() + 0.1);
+            }
+        }
+
+        function zoomOut() {
+            if (viewer) {
+                const canvas = viewer.get('canvas');
+                canvas.zoom(canvas.zoom() - 0.1);
+            }
+        }
+
+        function resetZoom() {
+            if (viewer) {
+                const canvas = viewer.get('canvas');
+                canvas.zoom('fit-viewport');
+            }
+        }
+
+        // Download-Funktionen
+        function downloadXML() {
+            if (!currentXML) {
+                showMessage('Kein BPMN-Diagramm zum Download verfügbar.', 'error');
+                return;
+            }
+            
+            const blob = new Blob([currentXML], { type: 'application/xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'bpmn-diagram.xml';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function downloadSVG() {
+            if (!viewer) {
+                showMessage('Kein BPMN-Diagramm zum Download verfügbar.', 'error');
+                return;
+            }
+            
+            viewer.saveSVG({ format: true }).then(function(result) {
+                const blob = new Blob([result.svg], { type: 'image/svg+xml' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'bpmn-diagram.svg';
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+        }
+
+        // Event Listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(() => {
+                initializeBPMNViewer();
+            }, 100);
+            
+            document.getElementById('generateBtn').addEventListener('click', generateBPMN);
+            
+            // Enter-Taste in Textarea
+            document.getElementById('processDescription').addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && e.ctrlKey) {
+                    generateBPMN();
+                }
+            });
+
+            // Initial API Key Input verstecken
+            toggleApiKeyInput();
+        });
+    </script>
+</body>
+</html>
