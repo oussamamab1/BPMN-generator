@@ -20,7 +20,6 @@
         }
 
         .container {
-            max-width: 1400px;
             margin: 0 auto;
             background: white;
             border-radius: 20px;
@@ -48,7 +47,7 @@
 
         .content {
             display: grid;
-            grid-template-columns: 1fr 2fr;
+            grid-template-columns: 1fr 3fr;
             gap: 0;
             height: 80vh;
         }
@@ -182,7 +181,6 @@
         #canvas {
             width: 100%;
             height: 100%;
-            margin-top: 200px;
         }
 
         .loading {
@@ -279,7 +277,7 @@
     <div class="container">
         <div class="header">
             <h1>🔄 BPMN Diagramm Generator</h1>
-            <p>Beschreibe deinen Geschäftsprozess und erhalte automatisch ein BPMN-Diagramm</p>
+            <p>Beschreibe deinen Geschäftsprozess und erhalte automatisch ein BPMN-Diagramm mit Mistral AI</p>
         </div>
         
         <div class="content">
@@ -287,16 +285,15 @@
                 <div class="api-selector">
                     <label for="aiProvider">KI-Provider wählen:</label>
                     <select id="aiProvider" onchange="toggleApiKeyInput()">
-                        <option value="demo">Demo </option>
-                        <option value="chatgpt">ChatGPT (OpenAI)</option>
-                        <option value="claude">Claude (Anthropic)</option>
+                        <option value="demo">Demo (Lokale XML-Datei)</option>
+                        <option value="mistral">Mistral AI</option>
                     </select>
                 </div>
 
                 <div id="apiKeySection" class="api-key-input">
-                    <label for="apiKey">API Key:</label>
-                    <input type="password" id="apiKey" placeholder="Gib deinen API-Key hier ein...">
-                    <small>Dein API-Key wird nur für diese Session gespeichert und nicht übertragen.</small>
+                    <label for="apiKey">Mistral AI API Key:</label>
+                    <input type="password" id="apiKey" placeholder="Gib deinen Mistral AI API-Key hier ein...">
+                    <small>Dein API-Key wird nur für diese Session gespeichert. Erhältlich unter: <a href="https://console.mistral.ai/" target="_blank">console.mistral.ai</a></small>
                 </div>
 
                 <div class="input-group">
@@ -344,6 +341,9 @@
                     <button class="control-btn" onclick="resetZoom()">🎯 Reset</button>
                     <button class="control-btn" onclick="downloadXML()">💾 XML</button>
                     <button class="control-btn" onclick="downloadSVG()">🖼️ SVG</button>
+                    <div class="control-btn" style="background: #e3f2fd; pointer-events: none; font-size: 12px; padding: 5px 10px;">
+                        🖱️ Scrollen = Bewegen | Shift+Scroll = Horizontal
+                    </div>
                 </div>
                 
                 <div id="loading" class="loading" style="display: none;">
@@ -376,6 +376,81 @@
                     container: '#canvas',
                     width: '100%',
                     height: '100%'
+                });
+                
+                // Scrolling und Panning aktivieren
+                viewer.on('import.done', function() {
+                    const canvas = viewer.get('canvas');
+                    const canvasElement = document.querySelector('#canvas .bjs-container');
+                    
+                    // Mausrad-Scrolling für Verschieben
+                    canvasElement.addEventListener('wheel', function(e) {
+                        e.preventDefault();
+                        
+                        const currentViewbox = canvas.viewbox();
+                        const scrollSpeed = 50;
+                        
+                        // Horizontal scrollen mit Shift + Mausrad
+                        if (e.shiftKey) {
+                            canvas.viewbox({
+                                x: currentViewbox.x + (e.deltaY > 0 ? scrollSpeed : -scrollSpeed),
+                                y: currentViewbox.y,
+                                width: currentViewbox.width,
+                                height: currentViewbox.height
+                            });
+                        } 
+                        // Vertikal scrollen mit normalem Mausrad
+                        else {
+                            canvas.viewbox({
+                                x: currentViewbox.x,
+                                y: currentViewbox.y + (e.deltaY > 0 ? scrollSpeed : -scrollSpeed),
+                                width: currentViewbox.width,
+                                height: currentViewbox.height
+                            });
+                        }
+                    });
+                    
+                    // Drag-to-Pan (ziehen zum verschieben)
+                    let isDragging = false;
+                    let startPoint = { x: 0, y: 0 };
+                    let startViewbox = null;
+                    
+                    canvasElement.addEventListener('mousedown', function(e) {
+                        if (e.button === 0) { // Linke Maustaste
+                            isDragging = true;
+                            startPoint = { x: e.clientX, y: e.clientY };
+                            startViewbox = canvas.viewbox();
+                            canvasElement.style.cursor = 'grabbing';
+                            e.preventDefault();
+                        }
+                    });
+                    
+                    canvasElement.addEventListener('mousemove', function(e) {
+                        if (isDragging && startViewbox) {
+                            const deltaX = startPoint.x - e.clientX;
+                            const deltaY = startPoint.y - e.clientY;
+                            
+                            const zoomLevel = canvas.zoom();
+                            
+                            canvas.viewbox({
+                                x: startViewbox.x + deltaX / zoomLevel,
+                                y: startViewbox.y + deltaY / zoomLevel,
+                                width: startViewbox.width,
+                                height: startViewbox.height
+                            });
+                        } else {
+                            canvasElement.style.cursor = 'grab';
+                        }
+                    });
+                    
+                    document.addEventListener('mouseup', function() {
+                        isDragging = false;
+                        startViewbox = null;
+                        canvasElement.style.cursor = 'grab';
+                    });
+                    
+                    // Initial cursor
+                    canvasElement.style.cursor = 'grab';
                 });
                 
                 console.log('BPMN Viewer erfolgreich initialisiert');
@@ -524,8 +599,11 @@
             if (!viewer) return;
             
             try {
-                await viewer.importXML(xml);
-                currentXML = xml;
+                // XML validieren und bereinigen
+                const cleanedXML = validateAndCleanBPMN(xml);
+                
+                await viewer.importXML(cleanedXML);
+                currentXML = cleanedXML;
                 
                 // Auto-fit
                 const canvas = viewer.get('canvas');
@@ -535,8 +613,52 @@
                 document.getElementById('welcomeMessage').style.display = 'none';
             } catch (error) {
                 console.error('Fehler beim Laden des BPMN:', error);
-                showMessage('Fehler beim Anzeigen des BPMN-Diagramms: ' + error.message, 'error');
+                showMessage('Fehler beim Anzeigen des BPMN-Diagramms: ' + error.message + '. Versuche es mit einer detaillierteren Prozessbeschreibung.', 'error');
+                
+                // Fallback: Demo BPMN laden bei Fehlern
+                try {
+                    const demoBPMN = getDemoBPMN();
+                    await viewer.importXML(demoBPMN);
+                    currentXML = demoBPMN;
+                    const canvas = viewer.get('canvas');
+                    canvas.zoom('fit-viewport');
+                    showMessage('Fehlerhafte XML erkannt. Demo-Diagramm geladen. Bitte beschreibe deinen Prozess detaillierter.', 'error');
+                } catch (fallbackError) {
+                    console.error('Auch Demo BPMN konnte nicht geladen werden:', fallbackError);
+                }
             }
+        }
+
+        // XML validieren und bereinigen
+        function validateAndCleanBPMN(xml) {
+            let cleanedXML = xml.trim();
+            
+            // Entferne Markdown-Formatierung
+            cleanedXML = cleanedXML.replace(/```xml\n?/g, '');
+            cleanedXML = cleanedXML.replace(/```\n?/g, '');
+            cleanedXML = cleanedXML.replace(/^xml\n/g, '');
+            
+            // Prüfe auf XML-Deklaration
+            if (!cleanedXML.startsWith('<?xml')) {
+                cleanedXML = '<?xml version="1.0" encoding="UTF-8"?>\n' + cleanedXML;
+            }
+            
+            // Prüfe auf BPMN definitions
+            if (!cleanedXML.includes('<bpmn:definitions') && !cleanedXML.includes('<definitions')) {
+                throw new Error('Kein gültiges BPMN XML - definitions Element fehlt');
+            }
+            
+            // Prüfe auf process Element
+            if (!cleanedXML.includes('<bpmn:process') && !cleanedXML.includes('<process')) {
+                throw new Error('Kein BPMN Process gefunden - das XML muss mindestens einen Process enthalten');
+            }
+            
+            // Prüfe auf BPMNDiagram für Visualisierung
+            if (!cleanedXML.includes('<bpmndi:BPMNDiagram') && !cleanedXML.includes('<BPMNDiagram')) {
+                console.warn('Keine Diagramm-Informationen gefunden - Visualisierung könnte fehlschlagen');
+            }
+            
+            return cleanedXML;
         }
 
         // API Key Input ein-/ausblenden
@@ -547,11 +669,11 @@
             
             if (provider === 'demo') {
                 apiKeySection.style.display = 'none';
-                // Demo-Text setzen
+                // Demo-Text für kreativen Prozess setzen
                 processDescription.value = "Ein Kunde möchte eine Bestellung aufgeben. Zuerst wird die Verfügbarkeit geprüft. Wenn verfügbar, wird die Bestellung bestätigt und zur Zahlung weitergeleitet. Nach erfolgreicher Zahlung wird das Produkt versendet. Falls nicht verfügbar, wird der Kunde benachrichtigt.";
             } else {
                 apiKeySection.style.display = 'block';
-                if (!processDescription.value || processDescription.value.includes("Ein Kunde möchte eine Bestellung")) {
+                if (processDescription.value.includes("🎬 Filmproduktion")) {
                     processDescription.value = "";
                 }
             }
@@ -582,78 +704,101 @@
                 return getDemoBPMN();
             }
             
-            if (provider === 'chatgpt') {
-                return await callOpenAI(description, apiKey);
-            }
-            
-            if (provider === 'claude') {
-                return await callClaude(description, apiKey);
+            if (provider === 'mistral') {
+                return await callMistralAI(description, apiKey);
             }
             
             throw new Error('Unbekannter Provider');
         }
 
-        // OpenAI API aufrufen
-        async function callOpenAI(description, apiKey) {
-            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        // Mistral AI API aufrufen
+        async function callMistralAI(description, apiKey) {
+            const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${apiKey}`
                 },
                 body: JSON.stringify({
-                    model: 'gpt-4',
+                    model: 'mistral-large-latest',
                     messages: [{
+                        role: 'system',
+                        content: `Du bist ein Experte für BPMN 2.0 XML-Generierung. Du generierst ausschließlich valides, vollständiges BPMN 2.0 XML mit korrekten Namespaces und Diagramm-Koordinaten.
+
+WICHTIGE REGELN:
+1. Beginne IMMER mit: <?xml version="1.0" encoding="UTF-8"?>
+2. Verwende ALLE notwendigen Namespaces in <bpmn:definitions>
+3. Erstelle sowohl <bpmn:process> als auch <bpmndi:BPMNDiagram>
+4. Jedes Element braucht eindeutige IDs
+5. Alle sequenceFlow müssen sourceRef und targetRef haben
+6. Verwende deutsche Namen für Tasks und Events
+7. Füge Koordinaten für ALLE visuellen Elemente hinzu
+
+NAMESPACE TEMPLATE:
+xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" 
+xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+xmlns:di="http://www.omg.org/spec/DD/20100524/DI"`
+                    }, {
                         role: 'user',
-                        content: `Generiere ein vollständiges BPMN 2.0 XML-Diagramm für folgenden Geschäftsprozess. Das XML muss gültiges BPMN 2.0 Format haben mit allen notwendigen Namespaces und BPMNDiagram-Elementen für die Visualisierung:
+                        content: `Erstelle ein vollständiges BPMN 2.0 XML-Diagramm für:
 
-${description}
+**Prozessbeschreibung:** ${description}
 
-Antworte nur mit dem XML-Code, ohne weitere Erklärungen.`
+**KRITISCHE Anforderungen:**
+1. Das XML MUSS ein <bpmn:process> Element enthalten
+2. Der Process MUSS mindestens StartEvent und EndEvent haben
+3. ALLE Elemente brauchen eindeutige IDs (StartEvent_1, Task_1, etc.)
+4. ALLE sequenceFlow brauchen sourceRef und targetRef
+5. Das <bpmndi:BPMNDiagram> MUSS für jedes Element Koordinaten enthalten
+
+**Struktur-Template:**
+- StartEvent → Task(s) → [Gateway falls Entscheidung] → EndEvent
+- Bei Entscheidungen: ExclusiveGateway mit mehreren Ausgängen
+- Verwende deutsche Namen für Labels
+- Koordinaten: StartEvent bei x="100", Tasks alle 150px Abstand
+
+**Ausgabe:** Nur das vollständige XML, keine Erklärungen, keine Markdown-Blöcke.
+
+**Beispiel minimaler Aufbau:**
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions ...>
+  <bpmn:process id="Process_1" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1">
+    <bpmn:task id="Task_1">
+    <bpmn:endEvent id="EndEvent_1">
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Task_1"/>
+  </bpmn:process>
+  <bpmndi:BPMNDiagram>
+    [Koordinaten für alle Elemente]
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>`
                     }],
-                    max_tokens: 4000
+                    max_tokens: 6000,
+                    temperature: 0.0
                 })
             });
 
             if (!response.ok) {
                 const error = await response.json();
-                throw new Error(`OpenAI API Fehler: ${error.error?.message || response.statusText}`);
+                throw new Error(`Mistral AI API Fehler: ${error.message || response.statusText}`);
             }
 
             const data = await response.json();
-            return data.choices[0].message.content.trim();
-        }
-
-        // Claude API aufrufen
-        async function callClaude(description, apiKey) {
-            const response = await fetch('https://api.anthropic.com/v1/messages', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': apiKey,
-                    'anthropic-version': '2023-06-01'
-                },
-                body: JSON.stringify({
-                    model: 'claude-3-sonnet-20240229',
-                    max_tokens: 4000,
-                    messages: [{
-                        role: 'user',
-                        content: `Generiere ein vollständiges BPMN 2.0 XML-Diagramm für folgenden Geschäftsprozess. Das XML muss gültiges BPMN 2.0 Format haben mit allen notwendigen Namespaces und BPMNDiagram-Elementen für die Visualisierung:
-
-${description}
-
-Antworte nur mit dem XML-Code, ohne weitere Erklärungen.`
-                    }]
-                })
-            });
-
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(`Claude API Fehler: ${error.error?.message || response.statusText}`);
+            let xmlContent = data.choices[0].message.content.trim();
+            
+            // XML bereinigen - entferne mögliche Markdown-Formatierung
+            xmlContent = xmlContent.replace(/```xml\n?/g, '');
+            xmlContent = xmlContent.replace(/```\n?/g, '');
+            xmlContent = xmlContent.replace(/^xml\n/g, '');
+            
+            // Validiere, dass es mit XML-Deklaration beginnt
+            if (!xmlContent.startsWith('<?xml')) {
+                // Falls XML-Deklaration fehlt, hinzufügen
+                xmlContent = '<?xml version="1.0" encoding="UTF-8"?>\n' + xmlContent;
             }
-
-            const data = await response.json();
-            return data.content[0].text.trim();
+            
+            return xmlContent.trim();
         }
 
         // Hauptfunktion zum Generieren
@@ -668,8 +813,8 @@ Antworte nur mit dem XML-Code, ohne weitere Erklärungen.`
                 return;
             }
             
-            if (provider !== 'demo' && !apiKey.trim()) {
-                showMessage('Bitte gib deinen API-Key ein.', 'error');
+            if (provider === 'mistral' && !apiKey.trim()) {
+                showMessage('Bitte gib deinen Mistral AI API-Key ein.', 'error');
                 return;
             }
             
